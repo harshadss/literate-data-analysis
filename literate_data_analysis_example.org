@@ -1,0 +1,399 @@
+#+TITLE:Demo of Literate Data Analysis & Learning Dplyr
+#+AUTHOR: Harshad Saykhedkar
+#+BABEL: :session *R* :cache yes :results output graphics :exports both :tangle yes 
+-----
+* Introduction
+I have been using R and Python for data analysis and machine learning since 
+last four years. My love for the two technologies follows the path of a 
+pendulum. But a clear distinction has emerged over few months: I switch to R
+while doing exploratory data analysis on any new problem. It is just probably
+effect of rot learning, but my fingers have gotten accustomed to all the R
+functions like head, tail, quantile, quickly plotting densities and so on.
+For this use case, I've never been able to wrap my head around Pandas in Python.
+On the other hand, the moment things move to a modeling or stage where I need to
+put things in production, Python shines. The APIs of scikit-learn are very well
+designed and superbly documented. In this area, Python packages are way ahead of
+R on usability, documentation and consistency front. Though, they sometimes fall
+behind on coverage.
+Moving on, quickly filtering, subsetting and grouping data is one use case where
+I was satisfied with neither R nor Python pandas so far. I know it is my laziness,
+but I've never practiced group by in pandas well to use it very effectively. In R,
+I use a mix of data.table package and aggregate in base R. But the approach is too
+crude and some of the code for data.table, especially windowing functions, is not
+at all readable or intuitive.
+I had always read that dplyr package is __the__ solution for this, but never 
+dabbled into it. In the sections below, I am finally trying to use it.
+* Setup
+Load datasets library and dplyr packge.
+#+begin_src R :session
+  suppressMessages(library(datasets))
+  suppressMessages(library(dplyr))
+  names(mtcars)
+#+end_src
+
+#+RESULTS:
+| mpg  |
+| cyl  |
+| disp |
+| hp   |
+| drat |
+| wt   |
+| qsec |
+| vs   |
+| am   |
+| gear |
+| carb |
+* Basics
+In this section we try out all the basic facilities in the package.
+
+** Select
+Selector command allows selecting only specific columns in a data frame.
+This looks equivalent to the selectors in sql.
+*** Simple Select
+Use a single variable names to be selected. Returns another dataframe.
+#+BEGIN_SRC R :session
+  tmp <- select(mtcars, cyl)
+  head(tmp)
+#+END_SRC
+
+#+RESULTS:
+| 6 |
+| 6 |
+| 4 |
+| 6 |
+| 8 |
+| 6 |
+*** Select Multiple Variables
+#+BEGIN_SRC R :session
+  tmp <- select(mtcars, cyl, disp)
+  head(tmp)
+#+END_SRC
+
+#+RESULTS:
+| 6 | 160 |
+| 6 | 160 |
+| 4 | 108 |
+| 6 | 258 |
+| 8 | 360 |
+| 6 | 225 |
+*** Selecting On Pattern
+This is a beautiful use case solved by the dplyr pakage. Column name selection
+often needs to be done such that all column names matching a pattern need to
+be selected alongwith some specific column. I have given some examples below.
+  + Select ID column alongwith all columns starting with tag_
+  + Select all columns mathing day_ and month_ alongwith ID and name.
+In base R, this implies doing some regexp hacking on the column names of the
+data frame and then doing vector conjugation to create final name vector. The
+dplyr package solves this as follows.
+**** Select based on start
+#+BEGIN_SRC R :session
+  head(select(mtcars, starts_with("cy")))
+#+END_SRC
+
+#+RESULTS:
+| 6 |
+| 6 |
+| 4 |
+| 6 |
+| 8 |
+| 6 |
+
+**** Select on end
+#+BEGIN_SRC R :session
+  head(select(mtcars, ends_with("l")))
+#+END_SRC
+
+#+RESULTS:
+| 6 |
+| 6 |
+| 4 |
+| 6 |
+| 8 |
+| 6 |
+**** Select on contains
+Uses substring match.
+#+BEGIN_SRC R :session
+  head(select(mtcars, matches("*t.*")))
+#+END_SRC
+
+#+RESULTS:
+|  3.9 |  2.62 |
+|  3.9 | 2.875 |
+| 3.85 |  2.32 |
+| 3.08 | 3.215 |
+| 3.15 |  3.44 |
+| 2.76 |  3.46 |
+**** Select on regexp match
+#+BEGIN_SRC R :session
+  head(select(mtcars, matches("h|t")))
+#+END_SRC
+
+#+RESULTS:
+| 110 |  3.9 |  2.62 |
+| 110 |  3.9 | 2.875 |
+|  93 | 3.85 |  2.32 |
+| 110 | 3.08 | 3.215 |
+| 175 | 3.15 |  3.44 |
+| 105 | 2.76 |  3.46 |
+
+**** Select on numbers
+Uses a range of numbers to select columns.
+Example to be added.
+
+**** Select one of
+This seems to be selecting all matching columns. Though I do not understand
+how is it different that selecting using simple list.
+#+BEGIN_SRC R :session
+  head(select(mtcars, one_of("hp", "cyl")))
+#+END_SRC
+
+#+RESULTS:
+| 110 | 6 |
+| 110 | 6 |
+|  93 | 4 |
+| 110 | 6 |
+| 175 | 8 |
+| 105 | 6 |
+*** Using select for re-ordering
+This is another frequent use case where you'd want the columns
+to shop up in particular order. It could be combined with other
+special functions given above.
+#+BEGIN_SRC R :session
+  head(select(mtcars, hp, starts_with("c")))
+#+END_SRC
+
+#+RESULTS:
+| 110 | 6 | 4 |
+| 110 | 6 | 4 |
+|  93 | 4 | 1 |
+| 110 | 6 | 1 |
+| 175 | 8 | 2 |
+| 105 | 6 | 1 |
+** Filter
+Whereas select applies filters on columns, filter is used with rows.
+The following examples show various usage.
+
+*** Simple Filter
+The following selects all rows where car has six cylinders.
+#+BEGIN_SRC R :session
+  head(filter(mtcars, cyl == 6))
+#+END_SRC
+
+#+RESULTS:
+|   21 | 6 |   160 | 110 |  3.9 |  2.62 | 16.46 | 0 | 1 | 4 | 4 |
+|   21 | 6 |   160 | 110 |  3.9 | 2.875 | 17.02 | 0 | 1 | 4 | 4 |
+| 21.4 | 6 |   258 | 110 | 3.08 | 3.215 | 19.44 | 1 | 0 | 3 | 1 |
+| 18.1 | 6 |   225 | 105 | 2.76 |  3.46 | 20.22 | 1 | 0 | 3 | 1 |
+| 19.2 | 6 | 167.6 | 123 | 3.92 |  3.44 |  18.3 | 1 | 0 | 4 | 4 |
+| 17.8 | 6 | 167.6 | 123 | 3.92 |  3.44 |  18.9 | 1 | 0 | 4 | 4 |
+*** Multiple And Filters
+In the following, we supply multiple conditions to be matched. For examples,
+cars which have six cylinders and more than 100 hp power.
+#+BEGIN_SRC R :session
+  head(filter(mtcars, cyl == 6, hp > 100))
+#+END_SRC
+
+#+RESULTS:
+|   21 | 6 |   160 | 110 |  3.9 |  2.62 | 16.46 | 0 | 1 | 4 | 4 |
+|   21 | 6 |   160 | 110 |  3.9 | 2.875 | 17.02 | 0 | 1 | 4 | 4 |
+| 21.4 | 6 |   258 | 110 | 3.08 | 3.215 | 19.44 | 1 | 0 | 3 | 1 |
+| 18.1 | 6 |   225 | 105 | 2.76 |  3.46 | 20.22 | 1 | 0 | 3 | 1 |
+| 19.2 | 6 | 167.6 | 123 | 3.92 |  3.44 |  18.3 | 1 | 0 | 4 | 4 |
+| 17.8 | 6 | 167.6 | 123 | 3.92 |  3.44 |  18.9 | 1 | 0 | 4 | 4 |
+*** Complex Filters
+This is where it gets interesting. We supply complex condition with using
+and clause and or clause. Note the usage of & for and condition below rather
+than comma.
+#+BEGIN_SRC R :session
+  head(filter(mtcars, cyl < 4 | (disp > 167 & hp > 100)))
+#+END_SRC
+
+#+RESULTS:
+| 21.4 | 6 |   258 | 110 | 3.08 | 3.215 | 19.44 | 1 | 0 | 3 | 1 |
+| 18.7 | 8 |   360 | 175 | 3.15 |  3.44 | 17.02 | 0 | 0 | 3 | 2 |
+| 18.1 | 6 |   225 | 105 | 2.76 |  3.46 | 20.22 | 1 | 0 | 3 | 1 |
+| 14.3 | 8 |   360 | 245 | 3.21 |  3.57 | 15.84 | 0 | 0 | 3 | 4 |
+| 19.2 | 6 | 167.6 | 123 | 3.92 |  3.44 |  18.3 | 1 | 0 | 4 | 4 |
+| 17.8 | 6 | 167.6 | 123 | 3.92 |  3.44 |  18.9 | 1 | 0 | 4 | 4 |
+** Chaining
+This option is primarily for readability. Instead of nested function
+calls, we use another operator to chain a series of steps. Seems similar
+to threading macros in Clojure and the |> operator in Elixir. Below example
+first selects a few columns only and then puts a filter.
+Importantly, the dataset name comes outside or at the start while chaining
+the calls.
+#+BEGIN_SRC R :session
+mtcars %>% select(cyl, hp) %>% filter(cyl > 6)
+#+END_SRC
+
+#+RESULTS:
+| 8 | 175 |
+| 8 | 245 |
+| 8 | 180 |
+| 8 | 180 |
+| 8 | 180 |
+| 8 | 205 |
+| 8 | 215 |
+| 8 | 230 |
+| 8 | 150 |
+| 8 | 150 |
+| 8 | 245 |
+| 8 | 175 |
+| 8 | 264 |
+| 8 | 335 |
+** Arranging Rows
+The arrange function deals with ordering rows based on columns.
+*** Simple Arrange
+In example below, we sort the cars on the basis of power.
+#+BEGIN_SRC R :session
+  head(arrange(mtcars, hp))
+#+END_SRC
+
+#+RESULTS:
+| 30.4 | 4 |  75.7 | 52 | 4.93 | 1.615 | 18.52 | 1 | 1 | 4 | 2 |
+| 24.4 | 4 | 146.7 | 62 | 3.69 |  3.19 |    20 | 1 | 0 | 4 | 2 |
+| 33.9 | 4 |  71.1 | 65 | 4.22 | 1.835 |  19.9 | 1 | 1 | 4 | 1 |
+| 32.4 | 4 |  78.7 | 66 | 4.08 |   2.2 | 19.47 | 1 | 1 | 4 | 1 |
+| 27.3 | 4 |    79 | 66 | 4.08 | 1.935 |  18.9 | 1 | 1 | 4 | 1 |
+|   26 | 4 | 120.3 | 91 | 4.43 |  2.14 |  16.7 | 0 | 1 | 5 | 2 |
+The example below shows the same ordering but in descending order.
+#+BEGIN_SRC R :session
+  head(arrange(mtcars, desc(hp)))
+#+END_SRC
+
+#+RESULTS:
+|   15 | 8 | 301 | 335 | 3.54 |  3.57 |  14.6 | 0 | 1 | 5 | 8 |
+| 15.8 | 8 | 351 | 264 | 4.22 |  3.17 |  14.5 | 0 | 1 | 5 | 4 |
+| 14.3 | 8 | 360 | 245 | 3.21 |  3.57 | 15.84 | 0 | 0 | 3 | 4 |
+| 13.3 | 8 | 350 | 245 | 3.73 |  3.84 | 15.41 | 0 | 0 | 3 | 4 |
+| 14.7 | 8 | 440 | 230 | 3.23 | 5.345 | 17.42 | 0 | 0 | 3 | 4 |
+| 10.4 | 8 | 460 | 215 |    3 | 5.424 | 17.82 | 0 | 0 | 3 | 4 |
+*** Multi Column Sort
+In the example below, we sort vehicles based on decreasing order
+of number of cylinders and then ascending on the number of gears.
+#+BEGIN_SRC R :session
+  arrange(mtcars, desc(cyl), gear)
+#+END_SRC
+
+#+RESULTS:
+| 18.7 | 8 |   360 | 175 | 3.15 |  3.44 | 17.02 | 0 | 0 | 3 | 2 |
+| 14.3 | 8 |   360 | 245 | 3.21 |  3.57 | 15.84 | 0 | 0 | 3 | 4 |
+| 16.4 | 8 | 275.8 | 180 | 3.07 |  4.07 |  17.4 | 0 | 0 | 3 | 3 |
+| 17.3 | 8 | 275.8 | 180 | 3.07 |  3.73 |  17.6 | 0 | 0 | 3 | 3 |
+| 15.2 | 8 | 275.8 | 180 | 3.07 |  3.78 |    18 | 0 | 0 | 3 | 3 |
+| 10.4 | 8 |   472 | 205 | 2.93 |  5.25 | 17.98 | 0 | 0 | 3 | 4 |
+| 10.4 | 8 |   460 | 215 |    3 | 5.424 | 17.82 | 0 | 0 | 3 | 4 |
+| 14.7 | 8 |   440 | 230 | 3.23 | 5.345 | 17.42 | 0 | 0 | 3 | 4 |
+| 15.5 | 8 |   318 | 150 | 2.76 |  3.52 | 16.87 | 0 | 0 | 3 | 2 |
+| 15.2 | 8 |   304 | 150 | 3.15 | 3.435 |  17.3 | 0 | 0 | 3 | 2 |
+| 13.3 | 8 |   350 | 245 | 3.73 |  3.84 | 15.41 | 0 | 0 | 3 | 4 |
+| 19.2 | 8 |   400 | 175 | 3.08 | 3.845 | 17.05 | 0 | 0 | 3 | 2 |
+| 15.8 | 8 |   351 | 264 | 4.22 |  3.17 |  14.5 | 0 | 1 | 5 | 4 |
+|   15 | 8 |   301 | 335 | 3.54 |  3.57 |  14.6 | 0 | 1 | 5 | 8 |
+| 21.4 | 6 |   258 | 110 | 3.08 | 3.215 | 19.44 | 1 | 0 | 3 | 1 |
+| 18.1 | 6 |   225 | 105 | 2.76 |  3.46 | 20.22 | 1 | 0 | 3 | 1 |
+|   21 | 6 |   160 | 110 |  3.9 |  2.62 | 16.46 | 0 | 1 | 4 | 4 |
+|   21 | 6 |   160 | 110 |  3.9 | 2.875 | 17.02 | 0 | 1 | 4 | 4 |
+| 19.2 | 6 | 167.6 | 123 | 3.92 |  3.44 |  18.3 | 1 | 0 | 4 | 4 |
+| 17.8 | 6 | 167.6 | 123 | 3.92 |  3.44 |  18.9 | 1 | 0 | 4 | 4 |
+| 19.7 | 6 |   145 | 175 | 3.62 |  2.77 |  15.5 | 0 | 1 | 5 | 6 |
+| 21.5 | 4 | 120.1 |  97 |  3.7 | 2.465 | 20.01 | 1 | 0 | 3 | 1 |
+| 22.8 | 4 |   108 |  93 | 3.85 |  2.32 | 18.61 | 1 | 1 | 4 | 1 |
+| 24.4 | 4 | 146.7 |  62 | 3.69 |  3.19 |    20 | 1 | 0 | 4 | 2 |
+| 22.8 | 4 | 140.8 |  95 | 3.92 |  3.15 |  22.9 | 1 | 0 | 4 | 2 |
+| 32.4 | 4 |  78.7 |  66 | 4.08 |   2.2 | 19.47 | 1 | 1 | 4 | 1 |
+| 30.4 | 4 |  75.7 |  52 | 4.93 | 1.615 | 18.52 | 1 | 1 | 4 | 2 |
+| 33.9 | 4 |  71.1 |  65 | 4.22 | 1.835 |  19.9 | 1 | 1 | 4 | 1 |
+| 27.3 | 4 |    79 |  66 | 4.08 | 1.935 |  18.9 | 1 | 1 | 4 | 1 |
+| 21.4 | 4 |   121 | 109 | 4.11 |  2.78 |  18.6 | 1 | 1 | 4 | 2 |
+|   26 | 4 | 120.3 |  91 | 4.43 |  2.14 |  16.7 | 0 | 1 | 5 | 2 |
+| 30.4 | 4 |  95.1 | 113 | 3.77 | 1.513 |  16.9 | 1 | 1 | 5 | 2 |
+** Adding Newer Columns
+Simple use case here: adding new columns which are function of existing
+columns.
+*** Simple Computations
+In the example below, we compute weight to displacement ratio. Note that even
+though the function is called mutate, it doesn't mutate the existing frame but
+returns a new one.
+#+BEGIN_SRC R :session
+head(mutate(mtcars, disp_to_wt = disp/wt))
+#+END_SRC
+
+#+RESULTS:
+|   21 | 6 | 160 | 110 |  3.9 |  2.62 | 16.46 | 0 | 1 | 4 | 4 | 61.0687022900763 |
+|   21 | 6 | 160 | 110 |  3.9 | 2.875 | 17.02 | 0 | 1 | 4 | 4 | 55.6521739130435 |
+| 22.8 | 4 | 108 |  93 | 3.85 |  2.32 | 18.61 | 1 | 1 | 4 | 1 |  46.551724137931 |
+| 21.4 | 6 | 258 | 110 | 3.08 | 3.215 | 19.44 | 1 | 0 | 3 | 1 |  80.248833592535 |
+| 18.7 | 8 | 360 | 175 | 3.15 |  3.44 | 17.02 | 0 | 0 | 3 | 2 | 104.651162790698 |
+| 18.1 | 6 | 225 | 105 | 2.76 |  3.46 | 20.22 | 1 | 0 | 3 | 1 | 65.0289017341041 |
+*** Multiple Computations
+In the example below, we add two variables together.
+#+BEGIN_SRC R :session
+head(mutate(mtcars, disp_to_wt = disp/wt, mpg_to_cyl = mpg/cyl))
+#+END_SRC
+
+#+RESULTS:
+|   21 | 6 |   160 | 110 |  3.9 |  2.62 | 16.46 | 0 | 1 | 4 | 4 | 61.0687022900763 |              3.5 |
+|   21 | 6 |   160 | 110 |  3.9 | 2.875 | 17.02 | 0 | 1 | 4 | 4 | 55.6521739130435 |              3.5 |
+| 22.8 | 4 |   108 |  93 | 3.85 |  2.32 | 18.61 | 1 | 1 | 4 | 1 |  46.551724137931 |              5.7 |
+| 21.4 | 6 |   258 | 110 | 3.08 | 3.215 | 19.44 | 1 | 0 | 3 | 1 |  80.248833592535 | 3.56666666666667 |
+| 18.7 | 8 |   360 | 175 | 3.15 |  3.44 | 17.02 | 0 | 0 | 3 | 2 | 104.651162790698 |           2.3375 |
+| 18.1 | 6 |   225 | 105 | 2.76 |  3.46 | 20.22 | 1 | 0 | 3 | 1 | 65.0289017341041 | 3.01666666666667 |
+| 14.3 | 8 |   360 | 245 | 3.21 |  3.57 | 15.84 | 0 | 0 | 3 | 4 | 100.840336134454 |           1.7875 |
+| 24.4 | 4 | 146.7 |  62 | 3.69 |  3.19 |    20 | 1 | 0 | 4 | 2 |  45.987460815047 |              6.1 |
+| 22.8 | 4 | 140.8 |  95 | 3.92 |  3.15 |  22.9 | 1 | 0 | 4 | 2 | 44.6984126984127 |              5.7 |
+| 19.2 | 6 | 167.6 | 123 | 3.92 |  3.44 |  18.3 | 1 | 0 | 4 | 4 | 48.7209302325581 |              3.2 |
+| 17.8 | 6 | 167.6 | 123 | 3.92 |  3.44 |  18.9 | 1 | 0 | 4 | 4 | 48.7209302325581 | 2.96666666666667 |
+| 16.4 | 8 | 275.8 | 180 | 3.07 |  4.07 |  17.4 | 0 | 0 | 3 | 3 | 67.7641277641278 |             2.05 |
+| 17.3 | 8 | 275.8 | 180 | 3.07 |  3.73 |  17.6 | 0 | 0 | 3 | 3 |  73.941018766756 |           2.1625 |
+| 15.2 | 8 | 275.8 | 180 | 3.07 |  3.78 |    18 | 0 | 0 | 3 | 3 |  72.962962962963 |              1.9 |
+| 10.4 | 8 |   472 | 205 | 2.93 |  5.25 | 17.98 | 0 | 0 | 3 | 4 | 89.9047619047619 |              1.3 |
+| 10.4 | 8 |   460 | 215 |    3 | 5.424 | 17.82 | 0 | 0 | 3 | 4 | 84.8082595870206 |              1.3 |
+| 14.7 | 8 |   440 | 230 | 3.23 | 5.345 | 17.42 | 0 | 0 | 3 | 4 | 82.3199251637044 |           1.8375 |
+| 32.4 | 4 |  78.7 |  66 | 4.08 |   2.2 | 19.47 | 1 | 1 | 4 | 1 | 35.7727272727273 |              8.1 |
+| 30.4 | 4 |  75.7 |  52 | 4.93 | 1.615 | 18.52 | 1 | 1 | 4 | 2 | 46.8730650154799 |              7.6 |
+| 33.9 | 4 |  71.1 |  65 | 4.22 | 1.835 |  19.9 | 1 | 1 | 4 | 1 | 38.7465940054496 |            8.475 |
+| 21.5 | 4 | 120.1 |  97 |  3.7 | 2.465 | 20.01 | 1 | 0 | 3 | 1 | 48.7221095334686 |            5.375 |
+| 15.5 | 8 |   318 | 150 | 2.76 |  3.52 | 16.87 | 0 | 0 | 3 | 2 | 90.3409090909091 |           1.9375 |
+| 15.2 | 8 |   304 | 150 | 3.15 | 3.435 |  17.3 | 0 | 0 | 3 | 2 | 88.5007278020378 |              1.9 |
+| 13.3 | 8 |   350 | 245 | 3.73 |  3.84 | 15.41 | 0 | 0 | 3 | 4 | 91.1458333333333 |           1.6625 |
+| 19.2 | 8 |   400 | 175 | 3.08 | 3.845 | 17.05 | 0 | 0 | 3 | 2 | 104.031209362809 |              2.4 |
+| 27.3 | 4 |    79 |  66 | 4.08 | 1.935 |  18.9 | 1 | 1 | 4 | 1 | 40.8268733850129 |            6.825 |
+|   26 | 4 | 120.3 |  91 | 4.43 |  2.14 |  16.7 | 0 | 1 | 5 | 2 |  56.214953271028 |              6.5 |
+| 30.4 | 4 |  95.1 | 113 | 3.77 | 1.513 |  16.9 | 1 | 1 | 5 | 2 | 62.8552544613351 |              7.6 |
+| 15.8 | 8 |   351 | 264 | 4.22 |  3.17 |  14.5 | 0 | 1 | 5 | 4 | 110.725552050473 |            1.975 |
+| 19.7 | 6 |   145 | 175 | 3.62 |  2.77 |  15.5 | 0 | 1 | 5 | 6 | 52.3465703971119 | 3.28333333333333 |
+|   15 | 8 |   301 | 335 | 3.54 |  3.57 |  14.6 | 0 | 1 | 5 | 8 | 84.3137254901961 |            1.875 |
+| 21.4 | 4 |   121 | 109 | 4.11 |  2.78 |  18.6 | 1 | 1 | 4 | 2 | 43.5251798561151 |             5.35 |
+** GroupBy and Summarization
+Very important functionality. Pandas claims to provide a lot of goodies
+with group by. We explore the possibilities in dplyr package below.
+First we group by to allocate groups. Summarize functions are called
+next to apply the summary statistics.
+*** Simple Summarization
+In the example below, we calculate the average horse power by number
+of cylinders.
+#+BEGIN_SRC R :session
+  mtcars %>% group_by(cyl) %>% summarise(avg_power = mean(hp, na.rm = T))
+#+END_SRC
+
+#+RESULTS:
+| 4 | 82.6363636363636 |
+| 6 | 122.285714285714 |
+| 8 | 209.214285714286 |
+*** Multiple Summarizations
+This is very helpful. Let us say we want to apply mean and median
+to all columns matching some conditions (e.g mean for all lag columns).
+Then we can use summarise_each. The brilliant part is we can use all
+the same facilities provided by select here. In the example below,
+we apply mean and median to all columns starting with m or h.
+#+BEGIN_SRC R :session
+  mtcars %>% group_by(cyl) %>% summarise_each(funs(min, median), matches("^m|^h"))
+#+END_SRC
+
+#+RESULTS:
+| 4 | 21.4 |  52 |   26 |    91 |
+| 6 | 17.8 | 105 | 19.7 |   110 |
+| 8 | 10.4 | 150 | 15.2 | 192.5 |
+** Window Functions
+*** TODO Add more examples on window functions.
